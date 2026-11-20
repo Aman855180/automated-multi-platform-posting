@@ -6,7 +6,7 @@ https://developer.wordpress.org/rest-api/reference/posts/#create-a-post
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 
 from app.config import Settings, settings as default_settings
@@ -57,8 +57,13 @@ class WordPressPlatform(BasePlatform):
                     auth=(username, app_password),
                 )
 
-                if response.status_code == 201:
+                data: Dict[str, Any] = {}
+                try:
                     data = response.json()
+                except Exception:
+                    pass
+
+                if response.status_code == 201:
                     posted_url = data.get("link")
                     raw_date = data.get("date_gmt")
                     dt = None
@@ -74,12 +79,16 @@ class WordPressPlatform(BasePlatform):
                         dt=dt,
                     )
                 elif response.status_code in (401, 403):
+                    err_msg = data.get("message") or "Invalid credentials or insufficient permissions"
                     return self._create_failure_result(
-                        f"Authentication failed: Invalid credentials or insufficient permissions (HTTP {response.status_code})."
+                        f"Authentication failed: {err_msg} (HTTP {response.status_code})."
                     )
+                elif response.status_code == 429:
+                    return self._create_failure_result("Rate limit exceeded on WordPress API.")
                 else:
+                    err_msg = data.get("message") or response.text
                     return self._create_failure_result(
-                        f"WordPress API Error (HTTP {response.status_code}): {response.text}"
+                        f"WordPress API Error (HTTP {response.status_code}): {err_msg}"
                     )
 
         except httpx.TimeoutException:

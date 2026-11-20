@@ -5,7 +5,7 @@ Official API Reference: https://docs.bsky.app/docs/category/at-protocol-api
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 
 from app.config import Settings, settings as default_settings
@@ -47,16 +47,25 @@ class BlueskyPlatform(BasePlatform):
                 }
                 session_resp = await client.post(session_url, json=session_payload)
 
-                if session_resp.status_code == 401:
+                session_data: Dict[str, Any] = {}
+                try:
+                    session_data = session_resp.json()
+                except Exception:
+                    pass
+
+                if session_resp.status_code in (401, 403) or (
+                    session_resp.status_code == 400
+                    and "AuthenticationRequired" in str(session_data.get("error", ""))
+                ):
                     return self._create_failure_result(
                         "Authentication failed: Invalid Bluesky handle or app password."
                     )
                 elif session_resp.status_code != 200:
+                    err_msg = session_data.get("message") or session_resp.text
                     return self._create_failure_result(
-                        f"Session creation failed (HTTP {session_resp.status_code}): {session_resp.text}"
+                        f"Session creation failed (HTTP {session_resp.status_code}): {err_msg}"
                     )
 
-                session_data = session_resp.json()
                 access_jwt = session_data.get("accessJwt")
                 user_did = session_data.get("did")
                 resolved_handle = session_data.get("handle") or handle
@@ -85,8 +94,13 @@ class BlueskyPlatform(BasePlatform):
 
                 post_resp = await client.post(record_url, json=post_payload, headers=headers)
 
-                if post_resp.status_code in (200, 201):
+                post_data: Dict[str, Any] = {}
+                try:
                     post_data = post_resp.json()
+                except Exception:
+                    pass
+
+                if post_resp.status_code in (200, 201):
                     # AT-URI format: at://did:plc:xxx/app.bsky.feed.post/3kxxxxxxxxx
                     at_uri = post_data.get("uri", "")
                     rkey = at_uri.split("/")[-1] if "/" in at_uri else ""
@@ -103,9 +117,12 @@ class BlueskyPlatform(BasePlatform):
                     )
                 elif post_resp.status_code == 429:
                     return self._create_failure_result("Rate limit exceeded on Bluesky API.")
+                elif post_resp.status_code in (401, 403):
+                    return self._create_failure_result("Authentication token expired or rejected by Bluesky.")
                 else:
+                    err_msg = post_data.get("message") or post_resp.text
                     return self._create_failure_result(
-                        f"Post record failed (HTTP {post_resp.status_code}): {post_resp.text}"
+                        f"Post record failed (HTTP {post_resp.status_code}): {err_msg}"
                     )
 
         except httpx.TimeoutException:

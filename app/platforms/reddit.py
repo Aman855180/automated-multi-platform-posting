@@ -7,7 +7,7 @@ Official API Reference:
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 
 from app.config import Settings, settings as default_settings
@@ -65,8 +65,21 @@ class RedditPlatform(BasePlatform):
                     return self._create_failure_result(
                         "Authentication failed: Invalid Reddit client ID or client secret."
                     )
+                elif token_resp.status_code == 403:
+                    return self._create_failure_result(
+                        "Access forbidden: User-Agent blocked or Reddit API access denied."
+                    )
+                elif token_resp.status_code != 200:
+                    return self._create_failure_result(
+                        f"OAuth token request failed (HTTP {token_resp.status_code}): {token_resp.text}"
+                    )
 
-                token_json = token_resp.json()
+                token_json: Dict[str, Any] = {}
+                try:
+                    token_json = token_resp.json()
+                except Exception:
+                    pass
+
                 if "error" in token_json:
                     return self._create_failure_result(
                         f"Authentication failed: {token_json.get('error')} ({token_json.get('message', '')})"
@@ -105,12 +118,21 @@ class RedditPlatform(BasePlatform):
 
                 if submit_resp.status_code == 429:
                     return self._create_failure_result("Rate limit exceeded on Reddit API.")
+                elif submit_resp.status_code == 403:
+                    return self._create_failure_result(
+                        f"Permission denied: Not allowed to post to subreddit 'r/{subreddit}'."
+                    )
                 elif submit_resp.status_code != 200:
                     return self._create_failure_result(
                         f"Submit failed (HTTP {submit_resp.status_code}): {submit_resp.text}"
                     )
 
-                submit_data = submit_resp.json()
+                submit_data: Dict[str, Any] = {}
+                try:
+                    submit_data = submit_resp.json()
+                except Exception:
+                    pass
+
                 json_body = submit_data.get("json", {})
                 errors = json_body.get("errors", [])
                 if errors:

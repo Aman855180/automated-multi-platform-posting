@@ -5,7 +5,7 @@ Official API Reference: https://docs.joinmastodon.org/methods/statuses/#create
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 
 from app.config import Settings, settings as default_settings
@@ -48,20 +48,22 @@ class MastodonPlatform(BasePlatform):
             async with httpx.AsyncClient(timeout=self.config.REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
 
-                if response.status_code in (200, 201):
+                data: Dict[str, Any] = {}
+                try:
                     data = response.json()
-                    # Mastodon returns 'url' for public web link and 'created_at' ISO timestamp
+                except Exception:
+                    pass
+
+                if response.status_code in (200, 201):
                     posted_url = data.get("url") or data.get("uri")
                     created_at_raw = data.get("created_at")
                     dt = None
                     if created_at_raw:
                         try:
-                            # Replace trailing 'Z' if present for ISO parsing
                             dt = datetime.fromisoformat(created_at_raw.replace("Z", "+00:00"))
                         except Exception:
                             dt = None
 
-                    # If status is public or unlisted, it's viewable on the web
                     visibility = data.get("visibility", "public")
                     is_public = visibility in ("public", "unlisted")
 
@@ -71,9 +73,16 @@ class MastodonPlatform(BasePlatform):
                         dt=dt,
                     )
                 elif response.status_code == 401:
-                    return self._create_failure_result("Authentication failed: Invalid or expired Mastodon access token.")
+                    return self._create_failure_result(
+                        "Authentication failed: Invalid or expired Mastodon access token."
+                    )
+                elif response.status_code == 403:
+                    return self._create_failure_result(
+                        "Permission denied: Access token lacks required 'write:statuses' scope."
+                    )
                 elif response.status_code == 422:
-                    return self._create_failure_result(f"Unprocessable entity: {response.text}")
+                    error_detail = data.get("error", response.text)
+                    return self._create_failure_result(f"Unprocessable entity: {error_detail}")
                 elif response.status_code == 429:
                     return self._create_failure_result("Rate limit exceeded on Mastodon instance.")
                 else:

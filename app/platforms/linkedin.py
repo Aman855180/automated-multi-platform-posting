@@ -6,7 +6,7 @@ https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 
 from app.config import Settings, settings as default_settings
@@ -62,15 +62,18 @@ class LinkedInPlatform(BasePlatform):
             async with httpx.AsyncClient(timeout=self.config.REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.post(endpoint, json=payload, headers=headers)
 
+                data: Dict[str, Any] = {}
+                try:
+                    data = response.json()
+                except Exception:
+                    pass
+
                 if response.status_code == 201:
-                    # Successful creation returns the URN in 'x-restli-id' header
-                    post_urn = response.headers.get("x-restli-id") or response.headers.get("x-linkedin-id")
-                    if not post_urn and response.content:
-                        try:
-                            resp_json = response.json()
-                            post_urn = resp_json.get("id")
-                        except Exception:
-                            post_urn = None
+                    post_urn = (
+                        response.headers.get("x-restli-id")
+                        or response.headers.get("x-linkedin-id")
+                        or data.get("id")
+                    )
 
                     posted_url = (
                         f"https://www.linkedin.com/feed/update/{post_urn}"
@@ -93,6 +96,9 @@ class LinkedInPlatform(BasePlatform):
                     )
                 elif response.status_code == 429:
                     return self._create_failure_result("Rate limit exceeded on LinkedIn API.")
+                elif response.status_code in (400, 422):
+                    err_msg = data.get("message") or response.text
+                    return self._create_failure_result(f"LinkedIn request error: {err_msg}")
                 else:
                     return self._create_failure_result(
                         f"LinkedIn API Error (HTTP {response.status_code}): {response.text}"

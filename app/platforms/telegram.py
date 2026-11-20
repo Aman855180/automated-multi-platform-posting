@@ -5,7 +5,7 @@ Official API Reference: https://core.telegram.org/bots/api#sendmessage
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 
 from app.config import Settings, settings as default_settings
@@ -43,7 +43,12 @@ class TelegramPlatform(BasePlatform):
         try:
             async with httpx.AsyncClient(timeout=self.config.REQUEST_TIMEOUT_SECONDS) as client:
                 response = await client.post(endpoint, json=payload)
-                data = response.json()
+
+                data: Dict[str, Any] = {}
+                try:
+                    data = response.json()
+                except Exception:
+                    pass
 
                 if response.status_code == 200 and data.get("ok"):
                     result_obj = data.get("result", {})
@@ -62,15 +67,15 @@ class TelegramPlatform(BasePlatform):
                     # Telegram channels with a public username can be viewed at https://t.me/<username>/<message_id>
                     channel_username = (
                         chat_obj.get("username")
+                        or (chat_id if str(chat_id).startswith("@") else None)
                         or self.config.TELEGRAM_CHANNEL_USERNAME
                     )
+
                     if channel_username:
-                        # Strip leading @ if present
                         clean_username = channel_username.lstrip("@")
                         posted_url = f"https://t.me/{clean_username}/{message_id}"
                         public_access = True
                     else:
-                        # Private group or channel without public username
                         posted_url = None
                         public_access = False
 
@@ -79,9 +84,15 @@ class TelegramPlatform(BasePlatform):
                         public_access=public_access,
                         dt=dt,
                     )
-                elif response.status_code == 401 or not data.get("ok", True) and "Unauthorized" in data.get("description", ""):
+                elif response.status_code == 401 or (
+                    not data.get("ok", True)
+                    and "Unauthorized" in str(data.get("description", ""))
+                ):
+                    desc = data.get("description", "Invalid Telegram bot token")
+                    return self._create_failure_result(f"Authentication failed: {desc}")
+                elif response.status_code == 404 or data.get("error_code") == 404:
                     return self._create_failure_result(
-                        f"Authentication failed: {data.get('description', 'Invalid Telegram bot token')}"
+                        "Telegram API Error (HTTP 404): Bot token not found or invalid endpoint."
                     )
                 elif response.status_code == 429:
                     return self._create_failure_result("Rate limit exceeded on Telegram Bot API.")

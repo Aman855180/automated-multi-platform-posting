@@ -90,6 +90,52 @@ async def test_mastodon_auth_failure():
 
 
 @pytest.mark.asyncio
+async def test_mastodon_permission_denied():
+    """Ensure Mastodon returns a clear error on 403 Forbidden."""
+    config = Settings(
+        MASTODON_INSTANCE_URL="https://mastodon.social",
+        MASTODON_ACCESS_TOKEN="read_only_token",
+    )
+    platform = MastodonPlatform(config=config)
+
+    mock_resp = httpx.Response(
+        status_code=403,
+        json={"error": "This action is outside the authorized scopes"},
+        request=httpx.Request("POST", "https://mastodon.social/api/v1/statuses"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        result = await platform.publish("Check this https://example.com")
+
+        assert result.status == "failed"
+        assert "Permission denied" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_mastodon_rate_limit():
+    """Ensure Mastodon returns rate limit error on 429."""
+    config = Settings(
+        MASTODON_INSTANCE_URL="https://mastodon.social",
+        MASTODON_ACCESS_TOKEN="token_123",
+    )
+    platform = MastodonPlatform(config=config)
+
+    mock_resp = httpx.Response(
+        status_code=429,
+        text="Throttled",
+        request=httpx.Request("POST", "https://mastodon.social/api/v1/statuses"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        result = await platform.publish("Check this https://example.com")
+
+        assert result.status == "failed"
+        assert "Rate limit exceeded" in (result.error or "")
+
+
+@pytest.mark.asyncio
 async def test_mastodon_timeout():
     """Ensure Mastodon returns failure result when request times out."""
     config = Settings(
@@ -162,7 +208,7 @@ async def test_bluesky_publish_success():
 
 
 @pytest.mark.asyncio
-async def test_bluesky_auth_failure():
+async def test_bluesky_auth_failure_401():
     """Ensure Bluesky handles 401 invalid handle or password gracefully."""
     config = Settings(
         BLUESKY_HANDLE="user.bsky.social",
@@ -182,6 +228,57 @@ async def test_bluesky_auth_failure():
 
         assert result.status == "failed"
         assert "Authentication failed" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_bluesky_auth_failure_400_authentication_required():
+    """Ensure Bluesky handles AT Protocol 400 AuthenticationRequired as auth failure."""
+    config = Settings(
+        BLUESKY_HANDLE="user.bsky.social",
+        BLUESKY_APP_PASSWORD="wrong_password",
+    )
+    platform = BlueskyPlatform(config=config)
+
+    session_resp = httpx.Response(
+        status_code=400,
+        json={"error": "AuthenticationRequired", "message": "Invalid identifier or password"},
+        request=httpx.Request("POST", "https://bsky.social/xrpc/com.atproto.server.createSession"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = session_resp
+        result = await platform.publish("Visit https://example.com")
+
+        assert result.status == "failed"
+        assert "Authentication failed" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_bluesky_rate_limit():
+    """Ensure Bluesky handles 429 rate limit error."""
+    config = Settings(
+        BLUESKY_HANDLE="user.bsky.social",
+        BLUESKY_APP_PASSWORD="correct_password",
+    )
+    platform = BlueskyPlatform(config=config)
+
+    session_resp = httpx.Response(
+        status_code=200,
+        json={"accessJwt": "jwt_123", "did": "did:plc:123", "handle": "user.bsky.social"},
+        request=httpx.Request("POST", "https://bsky.social/xrpc/com.atproto.server.createSession"),
+    )
+    post_resp = httpx.Response(
+        status_code=429,
+        text="Rate limit exceeded",
+        request=httpx.Request("POST", "https://bsky.social/xrpc/com.atproto.repo.createRecord"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.side_effect = [session_resp, post_resp]
+        result = await platform.publish("Visit https://example.com")
+
+        assert result.status == "failed"
+        assert "Rate limit exceeded" in (result.error or "")
 
 
 # ==============================================================================
@@ -276,6 +373,29 @@ async def test_telegram_publish_success_private_chat():
         assert result.public_access is False
 
 
+@pytest.mark.asyncio
+async def test_telegram_token_not_found_404():
+    """Ensure Telegram handles 404 invalid bot token format with actionable error."""
+    config = Settings(
+        TELEGRAM_BOT_TOKEN="invalid_token",
+        TELEGRAM_CHAT_ID="@my_channel",
+    )
+    platform = TelegramPlatform(config=config)
+
+    mock_resp = httpx.Response(
+        status_code=404,
+        json={"ok": False, "error_code": 404, "description": "Not Found"},
+        request=httpx.Request("POST", "https://api.telegram.org/botinvalid_token/sendMessage"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        result = await platform.publish("Check out https://example.com")
+
+        assert result.status == "failed"
+        assert "HTTP 404" in (result.error or "")
+
+
 # ==============================================================================
 # Reddit Tests
 # ==============================================================================
@@ -338,6 +458,31 @@ async def test_reddit_publish_success():
         assert result.posted_url == "https://www.reddit.com/r/test/comments/123abc/check_out_our_platform/"
         assert result.public_access is True
         assert result.error is None
+
+
+@pytest.mark.asyncio
+async def test_reddit_forbidden_403():
+    """Ensure Reddit handles 403 user agent block or forbidden subreddit."""
+    config = Settings(
+        REDDIT_CLIENT_ID="fake_cid",
+        REDDIT_CLIENT_SECRET="fake_secret",
+        REDDIT_USERNAME="test_bot",
+        REDDIT_PASSWORD="test_password",
+    )
+    platform = RedditPlatform(config=config)
+
+    token_resp = httpx.Response(
+        status_code=403,
+        text="Blocked by Reddit",
+        request=httpx.Request("POST", "https://www.reddit.com/api/v1/access_token"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = token_resp
+        result = await platform.publish("Check out https://example.com")
+
+        assert result.status == "failed"
+        assert "Access forbidden" in (result.error or "")
 
 
 # ==============================================================================
@@ -404,6 +549,29 @@ async def test_linkedin_forbidden_scope():
         assert "Permission denied" in (result.error or "")
 
 
+@pytest.mark.asyncio
+async def test_linkedin_bad_request_400():
+    """Ensure LinkedIn extracts message from 400 Bad Request error."""
+    config = Settings(
+        LINKEDIN_ACCESS_TOKEN="valid_token",
+        LINKEDIN_AUTHOR_URN="urn:li:person:abcdef",
+    )
+    platform = LinkedInPlatform(config=config)
+
+    mock_resp = httpx.Response(
+        status_code=400,
+        json={"message": "Author URN is invalid or malformed"},
+        request=httpx.Request("POST", "https://api.linkedin.com/rest/posts"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        result = await platform.publish("Check out https://example.com")
+
+        assert result.status == "failed"
+        assert "Author URN is invalid" in (result.error or "")
+
+
 # ==============================================================================
 # WordPress Tests (Extensible 6th Platform)
 # ==============================================================================
@@ -439,3 +607,14 @@ async def test_wordpress_publish_success():
         assert result.public_access is True
         assert result.date == "2026-11-20"
         assert result.time == "14:00:00"
+
+
+@pytest.mark.asyncio
+async def test_wordpress_missing_credentials():
+    """Ensure WordPress reports missing credentials error."""
+    config = Settings(WORDPRESS_SITE_URL=None)
+    platform = WordPressPlatform(config=config)
+    result = await platform.publish("Check out https://example.com")
+
+    assert result.status == "failed"
+    assert "Missing credentials" in (result.error or "")

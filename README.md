@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063.svg)](https://docs.pydantic.dev/)
-[![Tests](https://img.shields.io/badge/Tests-33%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-47%20Passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
 A high-performance, asynchronous multi-platform publishing engine built with **FastAPI**, **Pydantic v2**, and **HTTPX**. The application exposes a single REST API endpoint (`POST /posting`) that accepts a marketing or update message with a Call-To-Action (CTA) link and automatically broadcasts it concurrently across 5+ major third-party platforms via their official APIs.
@@ -488,9 +488,9 @@ Response (`HTTP 422 Unprocessable Entity`):
 
 ---
 
-## 10. Running the Test Suite
+## 10. Running the Test Suite & Live Server Audit
 
-The automated test suite uses `pytest` with 33 comprehensive unit and integration tests.
+The automated test suite uses `pytest` with 47 comprehensive unit and integration tests.
 
 ### Execute All Tests
 
@@ -498,24 +498,36 @@ The automated test suite uses `pytest` with 33 comprehensive unit and integratio
 pytest -v
 ```
 
+### Run Live Server Audit (End-to-End against Uvicorn on Port 4000)
+
+```bash
+python scripts/live_audit.py
+```
+
 ### Test Coverage Highlights
 
-- **`tests/test_validation.py` (9 tests)**:
-  - Valid message with exactly one URL
-  - Message with trailing conversational punctuation (`https://example.com!`)
+- **`tests/test_validation.py` (15 tests)**:
+  - Valid message with single URL
+  - Trailing conversational punctuation trimming (`https://example.com!`)
+  - Query parameters and fragment identifiers (`?plan=pro&ref=test#overview`)
+  - Non-standard port handling (`:8443`)
+  - IPv4 address hosts (`http://192.168.1.1:8000`)
+  - Parenthesis-wrapped links (`(https://example.com/demo)`)
+  - Balanced internal URL parentheses (`FastAPI_(software)`)
   - Empty string and whitespace-only rejection
   - Message exceeding 200 characters rejection
-  - Boundary check: exactly 200 characters accepted
+  - Exactly 200 characters boundary test
   - Missing URL rejection
   - Multiple URLs rejection
+  - Unsupported schemes rejection (`ftp://`, `mailto:`)
   - Malformed URL rejection
-- **`tests/test_platforms.py` (16 tests)**:
-  - Mastodon: missing credentials, 200 success, 401 auth failure, timeout
-  - Bluesky: missing credentials, session + record success, 401 auth failure
-  - Telegram: missing credentials, public channel URL success, private chat `public_access=False` success
-  - Reddit: missing credentials, token exchange + submit success
-  - LinkedIn: missing credentials, 201 Created with URN header success, 403 permission denied
-  - WordPress: 201 Created with permalink success
+- **`tests/test_platforms.py` (24 tests)**:
+  - Mastodon: missing credentials, 200 success, 401 auth failure, 403 scope error, 429 rate limit, timeout
+  - Bluesky: missing credentials, session + record success, 401 auth failure, 400 AuthenticationRequired, 429 rate limit
+  - Telegram: missing credentials, public channel URL success, private chat `public_access=False` success, 404 token not found
+  - Reddit: missing credentials, token exchange + submit success, 403 forbidden
+  - LinkedIn: missing credentials, 201 Created with URN header success, 403 permission denied, 400 bad request error extraction
+  - WordPress: 201 Created with permalink success, missing credentials
 - **`tests/test_posting.py` (8 tests)**:
   - `GET /health` endpoint inspection
   - `POST /posting` validation error rejection (422)

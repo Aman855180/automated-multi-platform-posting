@@ -46,9 +46,9 @@ class PostingService:
     ) -> PlatformResult:
         """Execute publishing for a single platform guarded by timeout and exception boundary."""
         try:
-            # Enforce an outer timeout per platform task
-            timeout = self.config.REQUEST_TIMEOUT_SECONDS + 2.0
-            return await asyncio.wait_for(platform.publish(message), timeout=timeout)
+            # Enforce an outer timeout per platform task slightly above platform timeout
+            outer_timeout = self.config.REQUEST_TIMEOUT_SECONDS + 0.5
+            return await asyncio.wait_for(platform.publish(message), timeout=outer_timeout)
         except asyncio.TimeoutError:
             logger.warning("Timeout occurred publishing to %s", platform.name)
             return PlatformResult(

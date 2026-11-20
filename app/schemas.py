@@ -7,28 +7,50 @@ from pydantic import BaseModel, Field, field_validator
 
 
 # Regular expression to extract URL-like substrings from text
-# Matches http://, https://, or www. links, or standalone domain names
 URL_CANDIDATE_REGEX = re.compile(
     r"(?:https?://|www\.)[^\s<>'\"`]+",
     re.IGNORECASE,
 )
 
-# Domain name regex to validate hostnames (e.g., example.com, sub.domain.org, localhost)
+# Reject schemes that are not supported CTA protocols (e.g., ftp://, mailto:, file://)
+UNSUPPORTED_SCHEME_REGEX = re.compile(
+    r"\b(?:ftp|mailto|file|javascript|ssh|telnet)://[^\s]+",
+    re.IGNORECASE,
+)
+
+# Domain name regex to validate hostnames:
+# 1. Standard domains (e.g. example.com, sub.domain.org)
+# 2. Localhost
+# 3. Valid IPv4 addresses (e.g. 127.0.0.1, 192.168.1.1)
+# 4. Optional port numbers (:80, :4000)
 DOMAIN_REGEX = re.compile(
-    r"^(?:localhost|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63})(?::\d+)?$"
+    r"^(?:"
+    r"localhost|"
+    r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|"
+    r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}"
+    r")(?::\d+)?$"
 )
 
 
 def clean_url_punctuation(raw_url: str) -> str:
-    """Trim trailing punctuation marks commonly attached in conversational sentences."""
-    trailing_punctuation = ".,;:!?)]}\"'>"
-    return raw_url.rstrip(trailing_punctuation)
+    """Trim surrounding punctuation marks commonly attached in conversational sentences,
+
+    while preserving balanced parenthesis (e.g., Wikipedia URLs).
+    """
+    url = raw_url.rstrip(".,;:!?'\">`")
+    # If trailing bracket/parenthesis, only strip if it is unmatched
+    while url.endswith(")") and url.count(")") > url.count("("):
+        url = url[:-1]
+    while url.endswith("]") and url.count("]") > url.count("["):
+        url = url[:-1]
+    while url.endswith("}") and url.count("}") > url.count("{"):
+        url = url[:-1]
+    return url.rstrip(".,;:!?'\">`")
 
 
 def is_valid_url(url: str) -> bool:
     """Validate that the string is a well-formed HTTP/HTTPS URL with a valid host."""
     try:
-        # If url starts with www., prepend http:// for parsing
         test_url = url
         if test_url.lower().startswith("www."):
             test_url = "https://" + test_url
@@ -40,8 +62,8 @@ def is_valid_url(url: str) -> bool:
         if not parsed.netloc:
             return False
 
-        # Validate host portion
-        host = parsed.netloc.split("@")[-1]  # remove basic auth if present
+        # Validate host portion (strip port or basic auth for domain matching)
+        host = parsed.netloc.split("@")[-1]
         if not DOMAIN_REGEX.match(host):
             return False
 
@@ -74,13 +96,18 @@ class PostingRequest(BaseModel):
                 f"Message length ({len(trimmed)}) exceeds the maximum allowed limit of 200 characters."
             )
 
+        # Check for unsupported schemes
+        unsupported = UNSUPPORTED_SCHEME_REGEX.findall(trimmed)
+        if unsupported:
+            raise ValueError(
+                f"Unsupported URL scheme detected: '{unsupported[0]}'. Only HTTP and HTTPS URLs are allowed."
+            )
+
         # Detect potential URLs
         raw_matches = URL_CANDIDATE_REGEX.findall(trimmed)
-
-        # Clean trailing punctuation
         cleaned_urls = [clean_url_punctuation(u) for u in raw_matches]
 
-        # Check for malformed scheme attempts like 'http://', 'https://', 'htp://'
+        # Check for malformed scheme attempts like 'http://', 'https://'
         malformed_attempts = re.findall(r"\bhttps?://[^\s]*", trimmed, re.IGNORECASE)
         for attempt in malformed_attempts:
             cleaned = clean_url_punctuation(attempt)
@@ -98,7 +125,6 @@ class PostingRequest(BaseModel):
                 + ", ".join(cleaned_urls)
             )
 
-        # Validate the single detected URL
         single_url = cleaned_urls[0]
         if not is_valid_url(single_url):
             raise ValueError(f"The CTA URL '{single_url}' is malformed or invalid.")

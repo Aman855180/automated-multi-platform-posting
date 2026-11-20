@@ -19,6 +19,42 @@ def test_valid_message_with_trailing_punctuation():
     assert "https://example.com/demo" in req.message
 
 
+def test_valid_message_with_query_params_and_fragment():
+    """Ensure URL with complex query parameters and fragment identifier is accepted."""
+    msg = "Launch today: https://example.com/pricing?plan=pro&ref=test_suite#overview"
+    req = PostingRequest(message=msg)
+    assert "plan=pro" in req.message
+    assert "#overview" in req.message
+
+
+def test_valid_message_with_port():
+    """Ensure URL with non-standard port is accepted."""
+    msg = "Check our dev platform at https://example.com:8443/console"
+    req = PostingRequest(message=msg)
+    assert ":8443" in req.message
+
+
+def test_valid_message_with_ipv4():
+    """Ensure URL with IPv4 host is accepted."""
+    msg = "Internal dashboard available at http://192.168.1.1:8000/status"
+    req = PostingRequest(message=msg)
+    assert "192.168.1.1:8000" in req.message
+
+
+def test_valid_message_enclosed_in_parentheses():
+    """Ensure URL enclosed in surrounding parentheses is parsed without trailing paren."""
+    msg = "See our live analytics dashboard (https://example.com/dashboard) now."
+    req = PostingRequest(message=msg)
+    assert req.message == msg
+
+
+def test_valid_message_with_balanced_url_parentheses():
+    """Ensure URL containing balanced internal parentheses is preserved."""
+    msg = "Read docs at https://en.wikipedia.org/wiki/FastAPI_(software) today."
+    req = PostingRequest(message=msg)
+    assert "FastAPI_(software)" in req.message
+
+
 def test_empty_message_rejected():
     """Ensure empty message raises validation error."""
     with pytest.raises(ValidationError) as exc_info:
@@ -66,6 +102,14 @@ def test_message_with_multiple_urls_rejected():
     with pytest.raises(ValidationError) as exc_info:
         PostingRequest(message=msg)
     assert "Message must contain exactly one CTA link, but found 2" in str(exc_info.value)
+
+
+def test_unsupported_scheme_rejected():
+    """Ensure non-HTTP(S) schemes such as ftp:// or mailto: are rejected."""
+    msg = "Download resources from ftp://example.com/archive.zip"
+    with pytest.raises(ValidationError) as exc_info:
+        PostingRequest(message=msg)
+    assert "Unsupported URL scheme detected" in str(exc_info.value)
 
 
 def test_malformed_url_rejected():
