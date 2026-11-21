@@ -91,8 +91,8 @@ async def test_posting_service_all_success():
         MockPlatform("Mastodon", status="success", posted_url="https://mastodon.social/@u/1"),
         MockPlatform("Bluesky", status="success", posted_url="https://bsky.app/profile/u/post/1"),
         MockPlatform("Telegram", status="success", posted_url="https://t.me/channel/1"),
-        MockPlatform("Reddit", status="success", posted_url="https://reddit.com/r/test/comments/1"),
-        MockPlatform("LinkedIn", status="success", posted_url="https://linkedin.com/feed/update/1"),
+        MockPlatform("Discord", status="success", posted_url="https://discord.com/channels/1/2/3"),
+        MockPlatform("Dev.to", status="success", posted_url="https://dev.to/user/post-1"),
     ]
     service = PostingService(platforms=mock_platforms)
     response = await service.publish_message("Check our new site https://example.com")
@@ -115,8 +115,8 @@ async def test_posting_service_partial_failure():
         MockPlatform("Mastodon", status="success", posted_url="https://mastodon.social/@u/1"),
         MockPlatform("Bluesky", status="failed", error="Authentication failed: Invalid credentials"),
         MockPlatform("Telegram", status="success", posted_url="https://t.me/channel/1"),
-        MockPlatform("Reddit", status="failed", error="Rate limit exceeded"),
-        MockPlatform("LinkedIn", status="success", posted_url="https://linkedin.com/feed/update/1"),
+        MockPlatform("Discord", status="failed", error="Rate limit exceeded"),
+        MockPlatform("Dev.to", status="success", posted_url="https://dev.to/user/post-1"),
     ]
     service = PostingService(platforms=mock_platforms)
     response = await service.publish_message("Check our new site https://example.com")
@@ -130,8 +130,8 @@ async def test_posting_service_partial_failure():
     assert results_by_name["Bluesky"].status == "failed"
     assert results_by_name["Bluesky"].error == "Authentication failed: Invalid credentials"
     assert results_by_name["Telegram"].status == "success"
-    assert results_by_name["Reddit"].status == "failed"
-    assert results_by_name["LinkedIn"].status == "success"
+    assert results_by_name["Discord"].status == "failed"
+    assert results_by_name["Dev.to"].status == "success"
 
 
 @pytest.mark.asyncio
@@ -141,8 +141,8 @@ async def test_posting_service_all_failure():
         MockPlatform("Mastodon", status="failed", error="Missing credentials"),
         MockPlatform("Bluesky", status="failed", error="Missing credentials"),
         MockPlatform("Telegram", status="failed", error="Missing credentials"),
-        MockPlatform("Reddit", status="failed", error="Missing credentials"),
-        MockPlatform("LinkedIn", status="failed", error="Missing credentials"),
+        MockPlatform("Discord", status="failed", error="Missing credentials"),
+        MockPlatform("Dev.to", status="failed", error="Missing credentials"),
     ]
     service = PostingService(platforms=mock_platforms)
     response = await service.publish_message("Check our new site https://example.com")
@@ -204,8 +204,8 @@ def test_endpoint_end_to_end_with_injected_service():
         MockPlatform("Mastodon", status="success", posted_url="https://mastodon.social/@demo/1"),
         MockPlatform("Bluesky", status="success", posted_url="https://bsky.app/profile/demo/post/1"),
         MockPlatform("Telegram", status="success", posted_url="https://t.me/demo/1"),
-        MockPlatform("Reddit", status="success", posted_url="https://reddit.com/r/demo/1"),
-        MockPlatform("LinkedIn", status="success", posted_url="https://linkedin.com/feed/update/1"),
+        MockPlatform("Discord", status="success", posted_url="https://discord.com/channels/1/2/3"),
+        MockPlatform("Dev.to", status="success", posted_url="https://dev.to/demo/1"),
     ]
 
     with patch.object(posting_service, "platforms", custom_platforms):

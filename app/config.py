@@ -33,23 +33,6 @@ class Settings(BaseSettings):
     TELEGRAM_CHAT_ID: Optional[str] = None
     TELEGRAM_CHANNEL_USERNAME: Optional[str] = None
 
-    # Reddit
-    REDDIT_CLIENT_ID: Optional[str] = None
-    REDDIT_CLIENT_SECRET: Optional[str] = None
-    REDDIT_USERNAME: Optional[str] = None
-    REDDIT_PASSWORD: Optional[str] = None
-    REDDIT_SUBREDDIT: str = "test"
-    REDDIT_USER_AGENT: str = "automated-posting:v1.0.0"
-
-    # LinkedIn
-    LINKEDIN_ACCESS_TOKEN: Optional[str] = None
-    LINKEDIN_AUTHOR_URN: Optional[str] = None
-
-    # WordPress (Alternative / Extensible)
-    WORDPRESS_SITE_URL: Optional[str] = None
-    WORDPRESS_USERNAME: Optional[str] = None
-    WORDPRESS_APP_PASSWORD: Optional[str] = None
-
     # Discord (Webhooks API)
     DISCORD_WEBHOOK_URL: Optional[str] = None
     DISCORD_SERVER_ID: Optional[str] = None
