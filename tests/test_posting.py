@@ -58,8 +58,8 @@ def test_health_check_endpoint():
     assert "Mastodon" in data["target_platforms"]
     assert "Bluesky" in data["target_platforms"]
     assert "Telegram" in data["target_platforms"]
-    assert "Reddit" in data["target_platforms"]
-    assert "LinkedIn" in data["target_platforms"]
+    assert "Discord" in data["target_platforms"]
+    assert "Dev.to" in data["target_platforms"]
 
 
 def test_posting_endpoint_validation_errors():

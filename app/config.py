@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     WORDPRESS_USERNAME: Optional[str] = None
     WORDPRESS_APP_PASSWORD: Optional[str] = None
 
+    # Discord (Webhooks API)
+    DISCORD_WEBHOOK_URL: Optional[str] = None
+    DISCORD_SERVER_ID: Optional[str] = None
+
+    # Dev.to (Forem API)
+    DEVTO_API_KEY: Optional[str] = None
+
 
 # Global settings singleton
 settings = Settings()

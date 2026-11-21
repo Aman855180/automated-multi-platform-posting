@@ -11,6 +11,8 @@ from app.platforms.bluesky import BlueskyPlatform
 from app.platforms.telegram import TelegramPlatform
 from app.platforms.reddit import RedditPlatform
 from app.platforms.linkedin import LinkedInPlatform
+from app.platforms.discord import DiscordPlatform
+from app.platforms.devto import DevToPlatform
 from app.schemas import PlatformResult, PostingResponse
 
 logger = logging.getLogger(__name__)
@@ -32,14 +34,28 @@ class PostingService:
             self.platforms = self._get_default_platforms()
 
     def _get_default_platforms(self) -> List[BasePlatform]:
-        """Instantiate the 5 default target platforms according to assignment specification."""
-        return [
+        """Instantiate target platforms internally according to assignment specification.
+
+        Provides at least 5 core platforms (Mastodon, Bluesky, Telegram, Discord, Dev.to).
+        Optionally includes additional platforms (Reddit, LinkedIn) if their credentials are configured.
+        """
+        platforms: List[BasePlatform] = [
             MastodonPlatform(config=self.config),
             BlueskyPlatform(config=self.config),
             TelegramPlatform(config=self.config),
-            RedditPlatform(config=self.config),
-            LinkedInPlatform(config=self.config),
+            DiscordPlatform(config=self.config),
+            DevToPlatform(config=self.config),
         ]
+
+        reddit = RedditPlatform(config=self.config)
+        if reddit.config.REDDIT_CLIENT_ID and reddit.config.REDDIT_CLIENT_SECRET:
+            platforms.append(reddit)
+
+        linkedin = LinkedInPlatform(config=self.config)
+        if linkedin.config.LINKEDIN_ACCESS_TOKEN and linkedin.config.LINKEDIN_AUTHOR_URN:
+            platforms.append(linkedin)
+
+        return platforms
 
     async def _publish_to_platform(
         self, platform: BasePlatform, message: str

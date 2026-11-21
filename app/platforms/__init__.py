@@ -7,6 +7,8 @@ from app.platforms.telegram import TelegramPlatform
 from app.platforms.reddit import RedditPlatform
 from app.platforms.linkedin import LinkedInPlatform
 from app.platforms.wordpress import WordPressPlatform
+from app.platforms.discord import DiscordPlatform
+from app.platforms.devto import DevToPlatform
 
 __all__ = [
     "BasePlatform",
@@ -16,4 +18,6 @@ __all__ = [
     "RedditPlatform",
     "LinkedInPlatform",
     "WordPressPlatform",
+    "DiscordPlatform",
+    "DevToPlatform",
 ]

@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063.svg)](https://docs.pydantic.dev/)
-[![Tests](https://img.shields.io/badge/Tests-47%20Passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-51%20Passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
 A high-performance, asynchronous multi-platform publishing engine built with **FastAPI**, **Pydantic v2**, and **HTTPX**. The application exposes a single REST API endpoint (`POST /posting`) that accepts a marketing or update message with a Call-To-Action (CTA) link and automatically broadcasts it concurrently across 5+ major third-party platforms via their official APIs.
@@ -100,16 +100,30 @@ The service is engineered following production backend design patterns:
 
 ## 3. Selected Platforms & API Justification
 
-Five primary platforms were selected after rigorous evaluation of official API accessibility, write support, authentication feasibility, and public accessibility:
+Five primary platforms were selected and **100% live verified** using their official APIs, accompanied by additional extensible implementations:
 
-| Platform | Official API Reference | Auth Mechanism | Public Access Verifiable? | Why Selected? |
+| Platform | Official API Reference | Auth Mechanism | Public Access Verifiable? | Status & Live Verification |
 |---|---|---|---|---|
-| **1. Mastodon** | [Mastodon Statuses API](https://docs.joinmastodon.org/methods/statuses/#create) | OAuth2 Bearer Token (`write:statuses` scope) | **Yes**: returns permanent canonical `url` | Standard ActivityPub protocol; decentralized; developer-friendly token issuance; instantly returns public web permalink. |
-| **2. Bluesky** | [AT Protocol XRPC API](https://docs.bsky.app/docs/category/at-protocol-api) | App Password (`com.atproto.server.createSession` & `createRecord`) | **Yes**: permalink at `https://bsky.app/profile/{handle}/post/{rkey}` | Fast-growing decentralized network; modern JSON-RPC over HTTP; app-specific passwords eliminate complex OAuth2 redirect flows. |
-| **3. Telegram** | [Telegram Bot API](https://core.telegram.org/bots/api#sendmessage) | Bot Token (`sendMessage`) | **Yes**: `https://t.me/{username}/{message_id}` for public channels | Highest reliability and speed; official bot API requires no human session bypass; direct public channel web viewer. |
-| **4. Reddit** | [Reddit Submit API](https://www.reddit.com/dev/api#POST_api_submit) | Script App OAuth2 (Password grant) | **Yes**: returns Reddit post permalink | World's largest forum community; official submit endpoint supports self-posts directly to designated subreddits (`r/test`, etc.). |
-| **5. LinkedIn** | [LinkedIn Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api) | OAuth 2.0 User Access Token (`w_member_social`) | **Yes**: permalink at `https://www.linkedin.com/feed/update/{urn}` | Essential B2B and professional platform; official Posts API replaces legacy Shares API and returns canonical URN. |
-| **Bonus: WordPress** | [WordPress REST API](https://developer.wordpress.org/rest-api/reference/posts/#create-a-post) | Application Passwords (Basic Auth) | **Yes**: returns published post `link` | Ubiquitous CMS platform powering 40%+ of the web; demonstrates headless CMS content distribution. |
+| **1. Telegram** | [Telegram Bot API](https://core.telegram.org/bots/api#sendmessage) | Bot Token (`sendMessage`) | **Yes**: `https://t.me/{username}/{message_id}` | **Live Verified**: Real broadcast to public channel. |
+| **2. Bluesky** | [AT Protocol XRPC API](https://docs.bsky.app/docs/category/at-protocol-api) | App Password (`createSession` & `createRecord`) | **Yes**: `https://bsky.app/profile/{handle}/post/{rkey}` | **Live Verified**: Real post created in AT Protocol repository. |
+| **3. Mastodon** | [Mastodon Statuses API](https://docs.joinmastodon.org/methods/statuses/#create) | OAuth2 Bearer Token (`write:statuses` scope) | **Yes**: canonical instance `url` | **Live Verified**: Real federated toot on `mastodon.social`. |
+| **4. Discord** | [Discord Webhooks API](https://discord.com/developers/docs/resources/webhook#execute-webhook) | Webhook URL (`POST ?wait=true`) | **Yes**: `https://discord.com/channels/{guild}/{channel}/{id}` | **Live Verified**: Real message published to Discord channel. |
+| **5. Dev.to** | [Forem / Dev.to Articles API](https://developers.forem.com/api/v1#tag/articles/operation/createArticle) | API Key (`POST /api/articles`) | **Yes**: canonical article `url` | **Live Verified**: Real published article on `dev.to`. |
+| **Bonus: Reddit** | [Reddit Submit API](https://www.reddit.com/dev/api#POST_api_submit) | Script App OAuth2 (Password grant) | **Yes**: post permalink | Fully implemented; auto-included if credentials present. |
+| **Bonus: LinkedIn** | [LinkedIn Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api) | OAuth 2.0 (`w_member_social`) | **Yes**: `https://www.linkedin.com/feed/update/{urn}` | Fully implemented; auto-included if credentials present. |
+| **Bonus: WordPress** | [WordPress REST API](https://developer.wordpress.org/rest-api/reference/posts/#create-a-post) | Application Passwords (Basic Auth) | **Yes**: post `link` | Fully implemented; headless CMS content distribution. |
+
+### Live Verified Broadcast Evidence
+
+During real-world end-to-end testing of `POST /posting`, the following live posts were created concurrently across all 5 platforms:
+
+| Platform | Status | Live Canonical URL | Public Access |
+|---|:---:|---|:---:|
+| **Telegram** | `success` | [https://t.me/my_test_broadcast_123/6](https://t.me/my_test_broadcast_123/6) | True |
+| **Bluesky** | `success` | [https://bsky.app/profile/ak1223-04.bsky.social/post/3n2sta4qujp27](https://bsky.app/profile/ak1223-04.bsky.social/post/3n2sta4qujp27) | True |
+| **Mastodon** | `success` | [https://mastodon.social/@ak123_/117653809173153042](https://mastodon.social/@ak123_/117653809173153042) | True |
+| **Discord** | `success` | [https://discord.com/channels/1573623713344000062/1573623714824855605/1573636825833144341](https://discord.com/channels/1573623713344000062/1573623714824855605/1573636825833144341) | True |
+| **Dev.to** | `success` | [https://dev.to/aman_kumar_34c0fcd32e19fc/testing-automated-multi-platform-posting-live-across-5-pl-4doa](https://dev.to/aman_kumar_34c0fcd32e19fc/testing-automated-multi-platform-posting-live-across-5-pl-4doa) | True |
 
 ---
 
@@ -138,9 +152,11 @@ automated-posting/
 │   ├── platforms/
 │   │   ├── __init__.py          # Platform registry
 │   │   ├── base.py              # BasePlatform abstract base class contract
-│   │   ├── mastodon.py          # Mastodon Statuses API integration
-│   │   ├── bluesky.py           # Bluesky AT Protocol XRPC integration
 │   │   ├── telegram.py          # Telegram Bot API integration
+│   │   ├── bluesky.py           # Bluesky AT Protocol XRPC integration
+│   │   ├── mastodon.py          # Mastodon Statuses API integration
+│   │   ├── discord.py           # Discord Webhooks API integration
+│   │   ├── devto.py             # Dev.to Forem REST API integration
 │   │   ├── reddit.py            # Reddit OAuth2 & Submit API integration
 │   │   ├── linkedin.py          # LinkedIn Posts API integration
 │   │   └── wordpress.py         # WordPress REST API integration (extensible)

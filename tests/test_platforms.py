@@ -12,6 +12,8 @@ from app.platforms.mastodon import MastodonPlatform
 from app.platforms.reddit import RedditPlatform
 from app.platforms.telegram import TelegramPlatform
 from app.platforms.wordpress import WordPressPlatform
+from app.platforms.discord import DiscordPlatform
+from app.platforms.devto import DevToPlatform
 
 
 # ==============================================================================
@@ -618,3 +620,93 @@ async def test_wordpress_missing_credentials():
 
     assert result.status == "failed"
     assert "Missing credentials" in (result.error or "")
+
+
+# ==============================================================================
+# Discord Tests
+# ==============================================================================
+
+
+@pytest.mark.asyncio
+async def test_discord_missing_credentials():
+    """Ensure Discord fails gracefully when webhook URL is missing."""
+    config = Settings(DISCORD_WEBHOOK_URL=None)
+    platform = DiscordPlatform(config=config)
+    result = await platform.publish("Check out https://example.com")
+
+    assert result.status == "failed"
+    assert "Missing credentials" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_discord_publish_success():
+    """Ensure Discord executes webhook with wait=true and constructs channel permalink."""
+    config = Settings(
+        DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123/abc",
+        DISCORD_SERVER_ID="999888",
+    )
+    platform = DiscordPlatform(config=config)
+
+    mock_resp = httpx.Response(
+        status_code=200,
+        json={
+            "id": "111222333",
+            "channel_id": "444555",
+            "timestamp": "2026-11-21T10:00:00.000000+00:00",
+        },
+        request=httpx.Request("POST", "https://discord.com/api/webhooks/123/abc?wait=true"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        result = await platform.publish("Check out https://example.com")
+
+        assert result.status == "success"
+        assert result.posted_url == "https://discord.com/channels/999888/444555/111222333"
+        assert result.public_access is True
+        assert result.date == "2026-11-21"
+        assert result.time == "10:00:00"
+
+
+# ==============================================================================
+# Dev.to Tests
+# ==============================================================================
+
+
+@pytest.mark.asyncio
+async def test_devto_missing_credentials():
+    """Ensure Dev.to fails gracefully when API key is missing."""
+    config = Settings(DEVTO_API_KEY=None)
+    platform = DevToPlatform(config=config)
+    result = await platform.publish("Check out https://example.com")
+
+    assert result.status == "failed"
+    assert "Missing credentials" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_devto_publish_success():
+    """Ensure Dev.to creates an article and returns canonical public URL."""
+    config = Settings(DEVTO_API_KEY="test_api_key_123")
+    platform = DevToPlatform(config=config)
+
+    mock_resp = httpx.Response(
+        status_code=201,
+        json={
+            "id": 98765,
+            "url": "https://dev.to/user/automated-update-123",
+            "published_at": "2026-11-21T10:30:00Z",
+        },
+        request=httpx.Request("POST", "https://dev.to/api/articles"),
+    )
+
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        result = await platform.publish("Check out our tool https://example.com")
+
+        assert result.status == "success"
+        assert result.posted_url == "https://dev.to/user/automated-update-123"
+        assert result.public_access is True
+        assert result.date == "2026-11-21"
+        assert result.time == "10:30:00"
+
